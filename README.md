@@ -1,2 +1,4 @@
-# Lydia_Ryma_TP3_DataViz
-Created with CodeSandbox
+# Rendu TP3 Data Visualisation
+
+### SAIDJ Lydia p1811125
+### BOUICHE Ryma p1707475

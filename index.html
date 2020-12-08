@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8" />
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+    }
+    .tooltip {
+      color: #222;
+      background-color: #fff;
+      text-shadow: #020202e5 0 2px 0;
+      padding: 0.5em;
+      border-radius: 2.5px;
+      opacity: 0.8;
+      position: absolute;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+  <div>
+    <input
+      autocomplete="off"
+      id="slider"
+      type="range"
+      value="=1"
+      min="1"
+      step="1"
+    />
+    <span id="day"></span>
+  </div>
+</head>
+
+<body>
+  <script>
+    var width = 700,
+      height = 580;
+    init();
+    d3.select();
+    var svg = d3
+      .select("body")
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+    var tooltip = d3
+      .select("body")
+      .append("div")
+      .attr("class", "hidden tooltip");
+
+    var g = svg.append("g");
+    var projection = d3
+      .geoConicConformal()
+      .center([2.454071, 46.279229])
+      .scale(2800)
+      .translate([width / 2, height / 2]);
+
+    var path = d3.geoPath().projection(projection);
+    d3.json("france.geojson").then(function (jsondata) {
+      g.selectAll("path")
+        .data(jsondata.features)
+        .enter()
+        .append("path")
+        .attr("fill", "#ccc")
+        .attr("d", path);
+    });
+    //couleur
+    var color = d3
+      .scaleQuantize()
+      .range(["#b7ffda", "#9aedb7", "#82da91", "#82c67a", "#81b366"]);
+
+    d3.csv("covid-france-mars-avril.csv").then((data) => {
+      color.domain([0, 2000]);
+
+      var liste_jour = [];
+      for (var i = 0; i < data.length; i++) {
+        if (liste_jour.indexOf(data[i].jour) == -1) {
+          liste_jour.push(data[i].jour);
+        }
+      }
+      liste_jour = sortedList(liste_jour);
+
+      d3.json("france.geojson").then((json) => {
+        var jour = d3.select("#day").html();
+        for (var i = 0; i < data.length; i++) {
+          if (data[i].jour == jour) {
+            var dataDep = data[i].Département;
+            var dataValue = parseInt(data[i].hosp);
+            for (var j = 0; j < json.features.length; j++) {
+              var jsonDep = json.features[j].properties.nom;
+              if (dataDep == jsonDep) {
+                json.features[j].properties.value = dataValue;
+                break;
+              }
+            }
+          }
+        }
+
+        draw(json.features);
+
+        g.selectAll("path").data(json.features);
+
+        d3.select("#slider").on("input", (event) => {
+          val2 = event.target.value;
+          d3.select("#day").html(liste_jour[val2]);
+          updateViz(liste_jour[val2], data, json.features);
+        });
+      });
+    });
+    function init() {
+      d3.csv("covid-france-mars-avril.csv").then((data) => {
+        var liste = [];
+        var minimum = data[0].jour;
+        var min_c = "";
+        for (var i = 0; i < data.length; i++) {
+          if (liste.indexOf(data[i].jour) == -1) {
+            liste.push(data[i].jour);
+            min_c = data[i].jour.split("/").reverse().join();
+            var tmp = minimum.split("/").reverse().join();
+            if (tmp > min_c) {
+              minimum = data[i];
+            } else {
+              minimum;
+            }
+          }
+        }
+        d3.select("#slider")
+          .attr("min", 0)
+          .attr("value", 0)
+          .attr("max", liste.length - 1);
+
+        d3.select("#day").html(minimum);
+      });
+    }
+
+    function updateViz(day, datas, regions) {
+      var dep = "";
+      var hosps = 0;
+      var regionDep = "";
+
+      for (var i = 0; i < datas.length; i++) {
+        if (day == datas[i].jour) {
+          dep = datas[i].Département;
+          hosps = parseInt(datas[i].hosp);
+          for (var j = 0; j < regions.length; j++) {
+            regionDep = regions[j].properties.nom;
+            if (regionDep == dep) {
+              regions[j].properties.value = hosps;
+              regions[j].properties.hasChanged = true;
+              break;
+            }
+          }
+        }
+      }
+
+      draw(regions);
+    }
+
+    function draw(liste_valeurs) {
+      g.selectAll("path")
+        .data(liste_valeurs)
+        .join(
+          (enter) =>
+            enter
+              .append("path")
+              .attr("d", path)
+              .style("fill", function (d) {
+                var value = d.properties.value;
+
+                if (value) {
+                  return color(value);
+                } else {
+                  return "#ccc";
+                }
+              }),
+          (update) =>
+            update.style("fill", (d) => {
+              if (d.properties.value) {
+                return color(d.properties.value);
+              } else {
+                return "#ccc";
+              }
+            })
+        )
+        .on("mouseover", function (event, d) {
+          var pos = [event.pageX, event.pageY];
+          tooltip
+            .classed("hidden", false)
+            .html(d.properties.nom + "<br/>" + "hosp: " + d.properties.value);
+        })
+        .on("mouseout", (event, d) => {
+          tooltip.classed("hidden", true);
+        });
+    }
+    // Tri d'une liste
+    function sortedList(liste) {
+      return liste.sort(function (x, y) {
+        var a = x.split("/").reverse().join(),
+          b = y.split("/").reverse().join();
+        if (a < b) return -1;
+        else if (a > b) return 1;
+        else return 0;
+      });
+    }
+  </script>
+</body>
